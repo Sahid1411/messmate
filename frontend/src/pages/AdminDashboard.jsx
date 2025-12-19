@@ -10,30 +10,47 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 const AdminDashboard = () => {
     const [payments, setPayments] = useState([]);
     const [students, setStudents] = useState([]);
+    const [applications, setApplications] = useState([]);
+    const [attendanceRecords, setAttendanceRecords] = useState([]); // New state for visual marking
     const [activeTab, setActiveTab] = useState('overview'); 
-    const [selectedMonth, setSelectedMonth] = useState('November 2025');
     
-    const [settings, setSettings] = useState({ feeAmount: 2000, qrCodeUrl: '' });
-    // New state for the file upload
-    const [qrFile, setQrFile] = useState(null);
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleString('default', { month: 'long', year: 'numeric' }));
+    const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]); 
+    const [settings, setSettings] = useState({ feeAmount: 2000 }); // QR code state removed
     const [loading, setLoading] = useState(false);
+
+    const [replyData, setReplyData] = useState({ id: '', text: '', status: 'Approved' });
+
+    // PROFESSIONAL MODAL STATE FOR CASH PAYMENTS
+    const [cashModal, setCashModal] = useState({ show: false, studentId: '', name: '', amount: 2000 });
 
     const token = localStorage.getItem('token');
     const config = { headers: { Authorization: `Bearer ${token}` } };
 
-    useEffect(() => { fetchData(); }, []);
+    const getDropdownMonths = () => {
+        const months = [];
+        for (let i = -2; i <= 1; i++) {
+            const d = new Date();
+            d.setMonth(d.getMonth() + i);
+            months.push(d.toLocaleString('default', { month: 'long', year: 'numeric' }));
+        }
+        return months;
+    };
 
+    // Fetch core dashboard data
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [payRes, studRes, setRes] = await Promise.all([
+            const [payRes, studRes, setRes, appRes] = await Promise.all([
                 axios.get('http://localhost:5000/api/payment/all', config),
                 axios.get('http://localhost:5000/api/auth/students', config),
-                axios.get('http://localhost:5000/api/settings')
+                axios.get('http://localhost:5000/api/settings'),
+                axios.get('http://localhost:5000/api/mess/applications', config)
             ]);
             setPayments(payRes.data);
             setStudents(studRes.data);
             setSettings(setRes.data);
+            setApplications(appRes.data);
         } catch (error) {
             toast.error("Error loading dashboard data");
         } finally {
@@ -41,56 +58,95 @@ const AdminDashboard = () => {
         }
     };
 
-    // [UPDATED] Save Settings Handler (Uses FormData for Image Upload)
-    const handleSaveSettings = async (e) => {
-        e.preventDefault();
-        const formData = new FormData();
-        formData.append('feeAmount', settings.feeAmount);
-        if (qrFile) {
-            formData.append('qrImage', qrFile);
-        }
-
+    // New: Fetch attendance for specific date to show marked/unmarked status
+    const fetchAttendance = async () => {
         try {
-            const { data } = await axios.put('http://localhost:5000/api/settings', formData, {
-                headers: { 
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data' // Required for files
-                }
-            });
-            setSettings(data); // Update state with new URL
-            toast.success("Settings & QR Updated!");
+            const { data } = await axios.get(`http://localhost:5000/api/mess/attendance?date=${attendanceDate}`, config);
+            setAttendanceRecords(data);
         } catch (error) {
-            toast.error("Failed to update settings");
+            console.error("Attendance fetch error");
         }
     };
 
-    const handleCashPayment = async (studentId) => {
-        const amount = prompt("Enter Amount (Cash):", settings.feeAmount);
-        if(!amount) return;
+    useEffect(() => { 
+        fetchData(); 
+    }, []);
+
+    // Trigger attendance fetch whenever the date changes
+    useEffect(() => {
+        fetchAttendance();
+    }, [attendanceDate]);
+
+    const handleMarkAttendance = async (studentId, mealType) => {
         try {
-            await axios.post('http://localhost:5000/api/payment/record-cash', 
-                { studentId, amount, month: selectedMonth }, config);
-            toast.success("Cash Recorded");
+            await axios.post('http://localhost:5000/api/mess/attendance/mark', {
+                studentId,
+                date: attendanceDate,
+                mealType
+            }, config);
+            fetchAttendance(); // Refresh visual state immediately
+            toast.success("Attendance Updated");
+        } catch (error) {
+            toast.error("Failed to mark attendance");
+        }
+    };
+
+    const handleAppReply = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.put(`http://localhost:5000/api/mess/applications/${replyData.id}`, {
+                status: replyData.status,
+                adminReply: replyData.text
+            }, config);
+            toast.success("Response sent!");
+            setReplyData({ id: '', text: '', status: 'Approved' });
+            fetchData();
+        } catch (error) {
+            toast.error("Error sending response");
+        }
+    };
+
+    // Updated: Simple JSON update without QR code logic
+    const handleSaveSettings = async (e) => {
+        e.preventDefault();
+        try {
+            const { data } = await axios.put(
+                'http://localhost:5000/api/settings', 
+                { feeAmount: settings.feeAmount }, 
+                config
+            );
+            setSettings(data);
+            toast.success("Mess Fee Updated Successfully!");
+        } catch (error) { 
+            toast.error("Failed to update fee"); 
+        }
+    };
+
+    // NEW PROFESSIONAL CASH PAYMENT CONFIRMATION
+    const handleConfirmCashPayment = async (e) => {
+        e.preventDefault();
+        try {
+            await axios.post('http://localhost:5000/api/payment/record-cash', { 
+                studentId: cashModal.studentId, 
+                amount: cashModal.amount, 
+                month: selectedMonth 
+            }, config);
+            toast.success(`₹${cashModal.amount} Cash Recorded for ${cashModal.name}`);
+            setCashModal({ show: false, studentId: '', name: '', amount: 2000 }); // Close Modal
             fetchData();
         } catch (error) { toast.error("Error recording payment"); }
     };
 
-    // Data Processing
-    const paidStudentIds = payments.filter(p => p.month === selectedMonth).map(p => p.studentId?._id);
-    const defaulters = students.filter(student => !paidStudentIds.includes(student._id));
-    const paidCount = paidStudentIds.length;
-    const unpaidCount = defaulters.length;
-    const totalRevenue = payments.reduce((acc, curr) => acc + curr.amount, 0);
-
-    const chartData = {
-        labels: ['Paid', 'Unpaid'],
-        datasets: [{ data: [paidCount, unpaidCount], backgroundColor: ['#198754', '#dc3545'], borderWidth: 1 }]
+    // Keep original trigger logic but change to open modal
+    const handleCashPayment = (studentId, name) => {
+        setCashModal({
+            show: true,
+            studentId,
+            name,
+            amount: settings.feeAmount
+        });
     };
 
-    if (loading && payments.length === 0) return <div className="d-flex justify-content-center mt-5"><div className="spinner-border text-primary"></div></div>;
-
-
-    // [NEW] Actions
     const handleApprove = async (id) => {
         try {
             await axios.put(`http://localhost:5000/api/payment/approve/${id}`, {}, config);
@@ -109,39 +165,62 @@ const AdminDashboard = () => {
         }
     };
 
-    // Filter Pending Payments
-    const pendingPayments = payments.filter(p => p.status === 'Pending');
+    // Data Processing
+    const paidStudentIds = payments.filter(p => p.month === selectedMonth && p.status === 'Success').map(p => p.studentId?._id || p.studentId);
+    const defaulters = students.filter(student => !paidStudentIds.includes(student._id));
+    
+    // UPDATED: ROLLING 3-MONTH REVENUE LOGIC
+    const totalRevenue = payments.reduce((acc, curr) => {
+        const paymentDate = new Date(curr.createdAt || curr.date);
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
+        if (curr.status === 'Success' && paymentDate >= threeMonthsAgo) {
+            return acc + curr.amount;
+        }
+        return acc;
+    }, 0);
+
+    const chartData = {
+        labels: ['Paid', 'Unpaid'],
+        datasets: [{ data: [paidStudentIds.length, defaulters.length], backgroundColor: ['#198754', '#dc3545'], borderWidth: 1 }]
+    };
+
+    if (loading && payments.length === 0) return <div className="d-flex justify-content-center mt-5"><div className="spinner-border text-primary"></div></div>;
+
+    const pendingPayments = payments.filter(p => p.status === 'Pending');
 
     return (
         <>
             <Navbar />
             <div className="container py-5">
-                {/* Header */}
                 <div className="d-flex justify-content-between align-items-center mb-4">
                     <h2 className="fw-bold">Admin Dashboard</h2>
-                    <select className="form-select w-auto fw-bold text-primary border-primary" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
-                        <option>October 2025</option>
-                        <option>November 2025</option>
-                        <option>December 2025</option>
+                    <select 
+                        className="form-select w-auto fw-bold text-primary border-primary shadow-sm" 
+                        value={selectedMonth} 
+                        onChange={(e) => setSelectedMonth(e.target.value)}
+                    >
+                        {getDropdownMonths().map(month => (
+                            <option key={month} value={month}>{month}</option>
+                        ))}
                     </select>
                 </div>
 
-                <ul className="nav nav-tabs mb-4">
-                    <li className="nav-item"><button className={`nav-link ${activeTab === 'overview' ? 'active fw-bold' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button></li>
-                    <li className="nav-item"><button className={`nav-link ${activeTab === 'students' ? 'active fw-bold' : ''}`} onClick={() => setActiveTab('students')}>Students</button></li>
-                    <li className="nav-item"><button className={`nav-link ${activeTab === 'defaulters' ? 'active fw-bold text-danger' : 'text-danger'}`} onClick={() => setActiveTab('defaulters')}>Defaulters</button></li>
-                    <li className="nav-item"><button className={`nav-link ${activeTab === 'settings' ? 'active fw-bold text-dark' : 'text-dark'}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button></li>
+                <ul className="nav nav-tabs mb-4 border-0">
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'overview' ? 'active fw-bold text-primary border-bottom border-primary border-3' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button></li>
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'attendance' ? 'active fw-bold text-success border-bottom border-success border-3' : 'text-success'}`} onClick={() => setActiveTab('attendance')}>📅 Attendance</button></li>
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'applications' ? 'active fw-bold text-warning border-bottom border-warning border-3' : 'text-warning'}`} onClick={() => setActiveTab('applications')}>📩 Applications</button></li>
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'students' ? 'active fw-bold text-dark border-bottom border-dark border-3' : 'text-dark'}`} onClick={() => setActiveTab('students')}>Students</button></li>
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'defaulters' ? 'active fw-bold text-danger border-bottom border-danger border-3' : 'text-danger'}`} onClick={() => setActiveTab('defaulters')}>Defaulters</button></li>
+                    <li className="nav-item"><button className={`nav-link border-0 ${activeTab === 'settings' ? 'active fw-bold text-secondary border-bottom border-secondary border-3' : 'text-secondary'}`} onClick={() => setActiveTab('settings')}>⚙️ Settings</button></li>
                 </ul>
 
-                {/* [NEW] PENDING APPROVALS ALERT */}
-                {pendingPayments.length > 0 && (
-                    <div className="alert alert-warning shadow-sm mb-4">
+                {pendingPayments.length > 0 && activeTab === 'overview' && (
+                    <div className="alert alert-warning shadow-sm mb-4 border-0 border-start border-4 border-warning">
                         <h5 className="alert-heading fw-bold">⚠️ {pendingPayments.length} Pending Approvals</h5>
-                        <p className="mb-0">Students have submitted manual payments. Please verify transaction IDs.</p>
-                        
-                        <div className="table-responsive mt-3 bg-white rounded p-2">
-                            <table className="table table-sm mb-0">
+                        <div className="table-responsive mt-3 bg-white rounded-3 p-2">
+                            <table className="table table-sm mb-0 align-middle">
                                 <thead><tr><th>Student</th><th>Txn ID</th><th>Amount</th><th>Action</th></tr></thead>
                                 <tbody>
                                     {pendingPayments.map(pay => (
@@ -150,8 +229,8 @@ const AdminDashboard = () => {
                                             <td className="font-monospace text-primary">{pay.transactionId}</td>
                                             <td className="fw-bold">₹{pay.amount}</td>
                                             <td>
-                                                <button onClick={() => handleApprove(pay._id)} className="btn btn-sm btn-success me-2">Approve</button>
-                                                <button onClick={() => handleReject(pay._id)} className="btn btn-sm btn-outline-danger">Reject</button>
+                                                <button onClick={() => handleApprove(pay._id)} className="btn btn-sm btn-success me-2 rounded-pill px-3">Approve</button>
+                                                <button onClick={() => handleReject(pay._id)} className="btn btn-sm btn-outline-danger rounded-pill px-3">Reject</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -161,66 +240,158 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
-                {/* OVERVIEW TAB */}
                 {activeTab === 'overview' && (
-                    <div className="row">
-                        <div className="col-md-4 mb-4">
-                            <div className="card shadow-sm border-0 bg-primary text-white h-100">
-                                <div className="card-body">
-                                    <h5>Total Revenue</h5>
-                                    <h2 className="display-4 fw-bold">₹{totalRevenue.toLocaleString()}</h2>
-                                    <p>Lifetime collection</p>
+                    <div className="row g-4 animate__animated animate__fadeIn">
+                        <div className="col-md-4">
+                            <div className="card shadow-sm border-0 bg-primary text-white h-100 rounded-4">
+                                <div className="card-body p-4">
+                                    <h6 className="text-white-50 uppercase small fw-bold mb-3">Total Revenue (Last 3 Months)</h6>
+                                    <h2 className="display-5 fw-bold mb-0">₹{totalRevenue.toLocaleString()}</h2>
+                                    <div className="mt-3 small opacity-75">Based on confirmed successful transactions</div>
                                 </div>
                             </div>
                         </div>
-                        <div className="col-md-4 mb-4">
-                            <div className="card shadow-sm border-0 h-100">
-                                <div className="card-body text-center">
-                                    <h5 className="text-muted mb-3">Status ({selectedMonth})</h5>
-                                    <div style={{ maxHeight: '200px', display: 'flex', justifyContent: 'center' }}><Pie data={chartData} /></div>
-                                </div>
+                        <div className="col-md-4 text-center">
+                            <div className="card shadow-sm border-0 h-100 p-3 rounded-4">
+                                <h6 className="text-muted mb-3 fw-bold uppercase small">Status: {selectedMonth}</h6>
+                                <div style={{ maxHeight: '180px', display: 'flex', justifyContent: 'center' }}><Pie data={chartData} /></div>
                             </div>
                         </div>
-                        <div className="col-md-4 mb-4">
-                            <div className="card shadow-sm border-0 h-100">
-                                <div className="card-body">
-                                    <h5>Current Config</h5>
-                                    <div className="mt-3">
-                                        <h4>Fee: <span className="text-success">₹{settings.feeAmount}</span></h4>
-                                        <div className="mt-2">
-                                            <small className="text-muted">Active QR Code:</small><br/>
-                                            {settings.qrCodeUrl ? <img src={settings.qrCodeUrl} width="60" alt="QR" className="border rounded" /> : <span className="badge bg-warning text-dark">No QR Uploaded</span>}
-                                        </div>
-                                    </div>
-                                </div>
+                        <div className="col-md-4">
+                            <div className="card shadow-sm border-0 h-100 p-4 rounded-4">
+                                <h6 className="text-muted mb-3 fw-bold uppercase small">Quick Metrics</h6>
+                                <div className="d-flex justify-content-between mb-2"><span>Total Boarders:</span> <span className="fw-bold text-primary">{students.length}</span></div>
+                                <div className="d-flex justify-content-between mb-2"><span>Pending Verification:</span> <span className="fw-bold text-warning">{pendingPayments.length}</span></div>
+                                <div className="d-flex justify-content-between"><span>Active Applications:</span> <span className="fw-bold text-danger">{applications.filter(a => a.status === 'Pending').length}</span></div>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* [UPDATED] STUDENTS TAB - SHOWS ALL DETAILS */}
+                {activeTab === 'attendance' && (
+                    <div className="card shadow-sm border-0 p-4 rounded-4 animate__animated animate__fadeIn">
+                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                            <div>
+                                <h5 className="fw-bold mb-1 text-success">Daily Attendance Logger</h5>
+                                <p className="text-muted small mb-0">Toggle buttons to mark/unmark meals for the selected date</p>
+                            </div>
+                            <input type="date" className="form-control w-auto shadow-sm" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} />
+                        </div>
+                        <div className="table-responsive">
+                            <table className="table align-middle table-hover">
+                                <thead className="table-light">
+                                    <tr className="small uppercase text-muted">
+                                        <th>Student</th>
+                                        <th>Room</th>
+                                        <th className="text-center">Breakfast</th>
+                                        <th className="text-center">Lunch</th>
+                                        <th className="text-center">Dinner</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {students.map(s => {
+                                        const record = attendanceRecords.find(r => (r.studentId?._id || r.studentId) === s._id);
+                                        const isMarked = (type) => record?.meals?.[type] === true;
+                                        
+                                        return (
+                                            <tr key={s._id}>
+                                                <td><div className="fw-bold">{s.name}</div><div className="x-small text-muted">{s.rollNo}</div></td>
+                                                <td><span className="badge bg-light text-dark border">{s.roomNo}</span></td>
+                                                {['breakfast', 'lunch', 'dinner'].map(meal => (
+                                                    <td key={meal} className="text-center">
+                                                        <button 
+                                                            onClick={() => handleMarkAttendance(s._id, meal)} 
+                                                            className={`btn btn-sm rounded-pill px-3 transition-all ${isMarked(meal) ? 'btn-success shadow-sm' : 'btn-outline-secondary opacity-50'}`}
+                                                            style={{ minWidth: '85px' }}
+                                                        >
+                                                            {isMarked(meal) ? '✓ Marked' : 'Mark'}
+                                                        </button>
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'applications' && (
+                    <div className="row animate__animated animate__fadeIn">
+                        <div className="col-12">
+                            <h5 className="fw-bold mb-4 text-warning">Leave & Query Inbox</h5>
+                            {applications.length === 0 ? <div className="text-center py-5 bg-light rounded-4">No applications found.</div> : (
+                                applications.map(app => (
+                                    <div key={app._id} className={`card shadow-sm mb-3 border-0 border-start border-4 rounded-3 ${app.status === 'Pending' ? 'border-warning' : 'border-success'}`}>
+                                        <div className="card-body p-4">
+                                            <div className="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <h6 className="fw-bold mb-1">{app.studentId?.name} <span className="badge bg-light text-dark ms-2 border">{app.type}</span></h6>
+                                                    <div className="text-muted small mb-3">Room {app.studentId?.roomNo} | Submitted: {new Date(app.createdAt).toLocaleDateString()}</div>
+                                                </div>
+                                                <span className={`badge rounded-pill ${app.status === 'Pending' ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'}`}>{app.status}</span>
+                                            </div>
+                                            <p className="mb-3"><strong>{app.subject}</strong>: {app.message}</p>
+                                            {app.status === 'Pending' ? (
+                                                <button className="btn btn-sm btn-primary rounded-pill px-4" onClick={() => setReplyData({ ...replyData, id: app._id })}>Reply & Resolve</button>
+                                            ) : (
+                                                <div className="p-3 bg-light rounded-3 small border-start border-success border-3">
+                                                    <div className="fw-bold text-success mb-1">Admin Response:</div>
+                                                    {app.adminReply}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        {replyData.id && (
+                            <div className="modal show d-block animate__animated animate__fadeIn" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                <div className="modal-dialog modal-dialog-centered">
+                                    <div className="modal-content border-0 shadow-lg rounded-4">
+                                        <div className="modal-body p-4">
+                                            <h5 className="fw-bold mb-4">Respond to Student</h5>
+                                            <form onSubmit={handleAppReply}>
+                                                <label className="small fw-bold text-muted mb-1">Set Status</label>
+                                                <select className="form-select mb-3 rounded-3" value={replyData.status} onChange={e => setReplyData({...replyData, status: e.target.value})}>
+                                                    <option value="Approved">Approve / Acknowledge</option>
+                                                    <option value="Rejected">Reject</option>
+                                                </select>
+                                                <label className="small fw-bold text-muted mb-1">Reply Message</label>
+                                                <textarea className="form-control mb-4 rounded-3" rows="4" placeholder="Instruction or feedback for student..." value={replyData.text} onChange={e => setReplyData({...replyData, text: e.target.value})} required></textarea>
+                                                <div className="d-flex gap-2">
+                                                    <button className="btn btn-success w-100 py-2 fw-bold rounded-3">Send Response</button>
+                                                    <button type="button" className="btn btn-light w-100 py-2 fw-bold rounded-3" onClick={() => setReplyData({ id: '', text: '', status: 'Approved' })}>Cancel</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {activeTab === 'students' && (
-                    <div className="card shadow border-0">
-                        <div className="card-header bg-white py-3"><h5 className="mb-0">All Registered Students ({students.length})</h5></div>
+                    <div className="card shadow-sm border-0 rounded-4 animate__animated animate__fadeIn">
+                        <div className="card-header bg-white py-4 border-0 d-flex justify-content-between align-items-center">
+                            <h5 className="mb-0 fw-bold">Active Boarder Directory</h5>
+                            <span className="badge bg-primary-subtle text-primary rounded-pill px-3">{students.length} Total</span>
+                        </div>
                         <div className="table-responsive">
                             <table className="table table-hover align-middle mb-0">
-                                <thead className="table-light">
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Dept</th>
-                                        <th>Roll No</th>
-                                        <th>Room No</th>  
-                                    </tr>
+                                <thead className="table-light small uppercase">
+                                    <tr><th>Name</th><th>Email/Phone</th><th>Department</th><th>Roll No</th><th>Room</th></tr>
                                 </thead>
                                 <tbody>
                                     {students.map(student => (
                                         <tr key={student._id}>
-                                            <td className="fw-bold">{student.name}</td>
-                                            <td className="text-muted small">{student.email}</td>
-                                            <td><span className="badge bg-secondary">{student.dept || 'N/A'}</span></td>
-                                            <td>{student.rollNo || '-'}</td>
-                                            <td>{student.roomNo || '-'}</td>
+                                            <td className="fw-bold text-dark">{student.name}</td>
+                                            <td><div className="small">{student.email}</div><div className="x-small text-muted">{student.phone}</div></td>
+                                            <td><span className="badge bg-secondary-subtle text-secondary border-0 px-3">{student.dept}</span></td>
+                                            <td>{student.rollNo}</td>
+                                            <td><span className="badge bg-light text-dark border">{student.roomNo}</span></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -229,36 +400,32 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
-                {/* [UPDATED] DEFAULTERS TAB - SHOWS DUE AMOUNT & MONTH */}
                 {activeTab === 'defaulters' && (
-                    <div className="card shadow border-0 border-start border-danger border-5">
-                        <div className="card-header bg-danger text-white py-3">
-                            <h5 className="mb-0">⚠️ Defaulters List - {selectedMonth}</h5>
+                    <div className="card shadow-sm border-0 border-top border-danger border-4 rounded-4 animate__animated animate__fadeIn">
+                        <div className="card-header bg-white py-4 border-0">
+                            <h5 className="mb-0 fw-bold text-danger">⚠️ Defaulters List: {selectedMonth}</h5>
+                            <p className="text-muted small mb-0">Students who haven't paid as per LDCN Rule 17(c)</p>
                         </div>
                         <div className="table-responsive">
                             <table className="table align-middle">
-                                <thead>
-                                    <tr>
-                                        <th>Student Name</th>
-                                        <th>Dept</th>
-                                        <th>Due Month</th>
-                                        <th>Amount Due</th>
-                                        <th>Action</th>
-                                    </tr>
+                                <thead className="small uppercase text-muted">
+                                    <tr><th>Student</th><th>Department</th><th>Due Amount</th><th>Action</th></tr>
                                 </thead>
                                 <tbody>
                                     {defaulters.length === 0 ? (
-                                        <tr><td colSpan="5" className="text-center py-4">🎉 Everyone has paid!</td></tr>
+                                        <tr><td colSpan="4" className="text-center py-5 text-success fw-bold">🎉 No pending dues for this month!</td></tr>
                                     ) : (
                                         defaulters.map(student => (
                                             <tr key={student._id}>
-                                                <td className="fw-bold text-danger">{student.name}</td>
+                                                <td className="fw-bold">{student.name}</td>
                                                 <td>{student.dept}</td>
-                                                <td><span className="badge bg-warning text-dark">{selectedMonth}</span></td>
-                                                <td className="fw-bold">₹{settings.feeAmount}</td>
+                                                <td className="fw-bold text-danger">₹{settings.feeAmount}</td>
                                                 <td>
-                                                    <button onClick={() => handleCashPayment(student._id)} className="btn btn-sm btn-outline-success">
-                                                        Collect Cash
+                                                    <button 
+                                                        onClick={() => handleCashPayment(student._id, student.name)} 
+                                                        className="btn btn-sm btn-outline-success rounded-pill px-3"
+                                                    >
+                                                        Log Cash Payment
                                                     </button>
                                                 </td>
                                             </tr>
@@ -270,42 +437,37 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
-                {/* [UPDATED] SETTINGS TAB - FILE UPLOAD */}
                 {activeTab === 'settings' && (
-                    <div className="row justify-content-center">
-                        <div className="col-md-6">
-                            <div className="card shadow-lg border-0 rounded-3">
-                                <div className="card-header bg-dark text-white py-3"><h5 className="mb-0">⚙️ System Settings</h5></div>
-                                <div className="card-body p-4">
+                    <div className="row justify-content-center animate__animated animate__fadeIn">
+                        <div className="col-md-5">
+                            <div className="card shadow border-0 rounded-4">
+                                <div className="card-header bg-dark text-white py-4 rounded-top-4">
+                                    <h5 className="mb-0 text-center fw-bold">⚙️ Financial Settings</h5>
+                                </div>
+                                <div className="card-body p-5">
                                     <form onSubmit={handleSaveSettings}>
-                                        <div className="mb-3">
-                                            <label className="form-label fw-bold">Mess Fee Amount (₹)</label>
-                                            <input type="number" className="form-control" value={settings.feeAmount} onChange={(e) => setSettings({...settings, feeAmount: e.target.value})} required />
-                                        </div>
                                         <div className="mb-4">
-                                            <label className="form-label fw-bold">Upload New QR Code</label>
-                                            <input 
-                                                type="file" 
-                                                className="form-control" 
-                                                accept="image/*"
-                                                onChange={(e) => setQrFile(e.target.files[0])}
-                                            />
-                                            <div className="form-text">Upload a generic UPI QR code image (jpg/png).</div>
-                                            
-                                            {/* Preview existing or new file */}
-                                            <div className="mt-3 text-center p-3 bg-light rounded">
-                                                <p className="small text-muted mb-2">Current QR Preview:</p>
-                                                {qrFile ? (
-                                                     // Show preview of newly selected file
-                                                    <span className="text-success fw-bold">New file selected: {qrFile.name}</span>
-                                                ) : settings.qrCodeUrl ? (
-                                                    <img src={settings.qrCodeUrl} alt="Current QR" style={{ maxWidth: '200px' }} className="border rounded shadow-sm" />
-                                                ) : (
-                                                    <p className="text-muted">No QR Code uploaded yet.</p>
-                                                )}
+                                            <label className="form-label fw-bold text-muted small uppercase mb-2">
+                                                Standard Mess Fee (₹)
+                                            </label>
+                                            <div className="input-group input-group-lg shadow-sm">
+                                                <span className="input-group-text bg-white border-end-0 text-muted">₹</span>
+                                                <input 
+                                                    type="number" 
+                                                    className="form-control fw-bold border-start-0 ps-0" 
+                                                    value={settings.feeAmount} 
+                                                    onChange={(e) => setSettings({...settings, feeAmount: e.target.value})} 
+                                                    required 
+                                                />
+                                            </div>
+                                            <div className="form-text mt-3 p-3 bg-warning-subtle text-warning rounded-3 small">
+                                                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                                                This global amount dictates the "Pay Now" value for all students. Update with caution.
                                             </div>
                                         </div>
-                                        <button type="submit" className="btn btn-primary w-100 py-2 fw-bold">Save Changes</button>
+                                        <button type="submit" className="btn btn-primary w-100 py-3 fw-bold rounded-3 shadow-sm mt-2 transition-all">
+                                            Update Fee Amount
+                                        </button>
                                     </form>
                                 </div>
                             </div>
@@ -313,6 +475,49 @@ const AdminDashboard = () => {
                     </div>
                 )}
             </div>
+
+            {/* PROFESSIONAL CASH PAYMENT MODAL */}
+            {cashModal.show && (
+                <div className="modal show d-block animate__animated animate__fadeIn" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg rounded-4">
+                            <div className="modal-header border-0 bg-success text-white">
+                                <h5 className="modal-title fw-bold">Record Cash Payment</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setCashModal({...cashModal, show: false})}></button>
+                            </div>
+                            <form onSubmit={handleConfirmCashPayment}>
+                                <div className="modal-body p-4 text-center">
+                                    <p className="text-muted small">Confirming offline payment for <strong>{selectedMonth}</strong></p>
+                                    <h4 className="fw-bold text-dark">{cashModal.name}</h4>
+                                    <div className="mt-4">
+                                        <label className="small fw-bold text-muted d-block mb-2">Amount Received (₹)</label>
+                                        <input 
+                                            type="number" 
+                                            className="form-control form-control-lg fw-bold text-center border-success" 
+                                            value={cashModal.amount} 
+                                            onChange={(e) => setCashModal({...cashModal, amount: e.target.value})} 
+                                            required 
+                                        />
+                                    </div>
+                                </div>
+                                <div className="modal-footer border-0 p-3">
+                                    <button type="button" className="btn btn-light rounded-pill px-4" onClick={() => setCashModal({...cashModal, show: false})}>Cancel</button>
+                                    <button type="submit" className="btn btn-success rounded-pill px-4 fw-bold shadow-sm">Save & Confirm</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                .transition-all { transition: all 0.2s ease; }
+                .x-small { font-size: 0.75rem; }
+                .uppercase { text-transform: uppercase; letter-spacing: 1px; }
+                .rounded-4 { border-radius: 1rem !important; }
+                .nav-link:hover { opacity: 0.8; }
+                .transition-all:hover { transform: translateY(-2px); }
+            `}</style>
         </>
     );
 };

@@ -4,7 +4,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 function App() {
   return (
     <>

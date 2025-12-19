@@ -1,17 +1,18 @@
+// routes/authRoutes.js
 const express = require('express');
-// 1. IMPORT protect middleware
-const protect = require('../middleware/authMiddleware');
 
-// 2. IMPORT the new controller functions (getAllStudents, deleteUser)
-const { register, login, getAllStudents, deleteUser } = require('../controllers/authController');
+// 1. UPDATE THIS LINE: Use { } to extract the functions from the object
+const { protect, admin } = require('../middleware/authMiddleware'); 
+
+// 2. Import your controller functions
+const { register, login, getAllStudents, deleteUser,updateProfile } = require('../controllers/authController');
 
 const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
-
-// [NEW] Admin Only Routes
-router.get('/students', protect, getAllStudents); // Now 'protect' and 'getAllStudents' are defined
-router.delete('/student/:id', protect, deleteUser); // Now 'deleteUser' is defined
+router.put('/update-profile', protect, updateProfile);
+router.get('/students', protect, admin, getAllStudents); 
+router.delete('/student/:id', protect, admin, deleteUser); 
 
 module.exports = router;
