@@ -1,5 +1,7 @@
 const User = require('../models/user');
 const bcrypt = require('bcryptjs');
+const Application = require('../models/application');
+const Attendance = require('../models/attendance');   
 const jwt = require('jsonwebtoken');
 
 // Register User
@@ -44,7 +46,7 @@ exports.login = async (req, res) => {
             const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
             res.json({ 
                 token, 
-                user: { id: user._id, name: user.name, role: user.role, dept: user.dept, roomNo: user.roomNo, rollNo: user.rollNo,phone: user.phone || '' } 
+                user: { id: user._id, name: user.name, role: user.role, dept: user.dept, roomNo: user.roomNo, rollNo: user.rollNo,phone: user.phone || '',createdAt: user.createdAt } 
             });
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
@@ -67,13 +69,19 @@ exports.getAllStudents = async (req, res) => {
 // Delete User
 exports.deleteUser = async (req, res) => {
     try {
-        await User.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Student removed' });
+        const studentId = req.params.id;
+        
+        await User.findByIdAndDelete(studentId);
+        
+        await Application.deleteMany({ studentId: studentId });
+        await Attendance.deleteMany({ studentId: studentId });
+
+        res.json({ message: 'Student and all related records removed' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
-
+ 
 exports.updateProfile = async (req, res) => {
     try {
         const { name, phone, roomNo, dept } = req.body;

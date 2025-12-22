@@ -9,6 +9,6 @@ const applicationSchema = new mongoose.Schema({
     message: { type: String, required: true },
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     adminReply: { type: String, default: '' }
-}, { timestamps: true });
+}, { timestamps: true }); 
 
 module.exports = mongoose.model('Application', applicationSchema);

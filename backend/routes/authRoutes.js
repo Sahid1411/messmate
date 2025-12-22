@@ -8,11 +8,10 @@ const { protect, admin } = require('../middleware/authMiddleware');
 const { register, login, getAllStudents, deleteUser,updateProfile } = require('../controllers/authController');
 
 const router = express.Router();
-
+ 
 router.post('/register', register);
 router.post('/login', login);
 router.put('/update-profile', protect, updateProfile);
 router.get('/students', protect, admin, getAllStudents); 
 router.delete('/student/:id', protect, admin, deleteUser); 
-
-module.exports = router;
+module.exports = router; 

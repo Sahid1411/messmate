@@ -3,7 +3,7 @@ import axios from 'axios';
 import Navbar from '../components/Navbar';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
-import toast from 'react-hot-toast';
+import toast from 'react-hot-toast'; 
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -20,6 +20,9 @@ const AdminDashboard = () => {
     const [loading, setLoading] = useState(false);
 
     const [replyData, setReplyData] = useState({ id: '', text: '', status: 'Approved' });
+
+    // Add this near your other useState hooks
+    const [deleteModal, setDeleteModal] = useState({ show: false, id: '', name: '' });
 
     // PROFESSIONAL MODAL STATE FOR CASH PAYMENTS
     const [cashModal, setCashModal] = useState({ show: false, studentId: '', name: '', amount: 2000 });
@@ -164,10 +167,53 @@ const AdminDashboard = () => {
             } catch (error) { toast.error("Error rejecting"); }
         }
     };
+   
+    // Helper to convert "Month Year" string to a comparable date (1st of that month)
+    const getSelectedMonthDate = (monthStr) => {
+        const [month, year] = monthStr.split(' ');
+    return new Date(Date.parse(`${month} 1, ${year}`));
+    };
 
-    // Data Processing
-    const paidStudentIds = payments.filter(p => p.month === selectedMonth && p.status === 'Success').map(p => p.studentId?._id || p.studentId);
-    const defaulters = students.filter(student => !paidStudentIds.includes(student._id));
+    const selectedDate = getSelectedMonthDate(selectedMonth);
+
+    // Data Processing with Joining Date Check
+    const paidStudentIds = payments
+        .filter(p => p.month === selectedMonth && p.status === 'Success')
+        .map(p => p.studentId?._id || p.studentId);
+
+    const defaulters = students.filter(student => {
+        // 1. Check if already paid
+        const hasPaid = paidStudentIds.includes(student._id);
+        
+        // 2. Check if the student had joined by this month
+        const joinDate = new Date(student.createdAt);
+        const joiningMonthDate = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
+
+        const wasJoined = joiningMonthDate <= selectedDate;
+
+        // Only a defaulter if joined but NOT paid
+        return wasJoined && !hasPaid;
+    });
+
+
+        // function to delete a student
+
+        // Step A: Just open the modal
+        const confirmDelete = (id, name) => { 
+            setDeleteModal({ show: true, id, name });
+        };
+
+        // Step B: The actual API call
+        const handleFinalDelete = async () => {
+            try {
+                await axios.delete(`http://localhost:5000/api/auth/student/${deleteModal.id}`, config);
+                toast.success(`${deleteModal.name} removed successfully`);
+                setDeleteModal({ show: false, id: '', name: '' }); // Close box
+                fetchData(); // Refresh list
+            } catch (error) {
+                toast.error("Failed to remove student");
+            }
+        };
     
     // UPDATED: ROLLING 3-MONTH REVENUE LOGIC
     const totalRevenue = payments.reduce((acc, curr) => {
@@ -189,6 +235,7 @@ const AdminDashboard = () => {
     if (loading && payments.length === 0) return <div className="d-flex justify-content-center mt-5"><div className="spinner-border text-primary"></div></div>;
 
     const pendingPayments = payments.filter(p => p.status === 'Pending');
+
 
     return (
         <>
@@ -374,30 +421,40 @@ const AdminDashboard = () => {
                 )}
 
                 {activeTab === 'students' && (
-                    <div className="card shadow-sm border-0 rounded-4 animate__animated animate__fadeIn">
-                        <div className="card-header bg-white py-4 border-0 d-flex justify-content-between align-items-center">
-                            <h5 className="mb-0 fw-bold">Active Boarder Directory</h5>
-                            <span className="badge bg-primary-subtle text-primary rounded-pill px-3">{students.length} Total</span>
-                        </div>
-                        <div className="table-responsive">
-                            <table className="table table-hover align-middle mb-0">
-                                <thead className="table-light small uppercase">
-                                    <tr><th>Name</th><th>Email/Phone</th><th>Department</th><th>Roll No</th><th>Room</th></tr>
-                                </thead>
-                                <tbody>
-                                    {students.map(student => (
-                                        <tr key={student._id}>
-                                            <td className="fw-bold text-dark">{student.name}</td>
-                                            <td><div className="small">{student.email}</div><div className="x-small text-muted">{student.phone}</div></td>
-                                            <td><span className="badge bg-secondary-subtle text-secondary border-0 px-3">{student.dept}</span></td>
-                                            <td>{student.rollNo}</td>
-                                            <td><span className="badge bg-light text-dark border">{student.roomNo}</span></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                <div className="card shadow-sm border-0 rounded-4 animate__animated animate__fadeIn">
+                    <div className="card-header bg-white py-4 border-0 d-flex justify-content-between align-items-center">
+                        <h5 className="mb-0 fw-bold">Active Boarder Directory</h5>
+                        <span className="badge bg-primary-subtle text-primary rounded-pill px-3">{students.length} Total</span>
                     </div>
+                    <div className="table-responsive">
+                        <table className="table table-hover align-middle mb-0">
+                            <thead className="table-light small uppercase">
+                                {/* Added Action header */}
+                                <tr><th>Name</th><th>Email/Phone</th><th>Department</th><th>Roll No</th><th>Room</th><th>Action</th></tr>
+                            </thead>
+                            <tbody>
+                                {students.map(student => (
+                                    <tr key={student._id}>
+                                        <td className="fw-bold text-dark">{student.name}</td>
+                                        <td><div className="small">{student.email}</div><div className="x-small text-muted">{student.phone}</div></td>
+                                        <td><span className="badge bg-secondary-subtle text-secondary border-0 px-3">{student.dept}</span></td>
+                                        <td>{student.rollNo}</td>
+                                        <td><span className="badge bg-light text-dark border">{student.roomNo}</span></td>
+                                        {/* Added Delete Button */}
+                                        <td>
+                                           <button 
+                                            onClick={() => confirmDelete(student._id, student.name)} 
+                                            className="btn btn-sm btn-outline-danger rounded-pill transition-all"
+                                            >
+                                                Remove
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
                 )}
 
                 {activeTab === 'defaulters' && (
@@ -518,6 +575,35 @@ const AdminDashboard = () => {
                 .nav-link:hover { opacity: 0.8; }
                 .transition-all:hover { transform: translateY(-2px); }
             `}</style>
+
+            {/* PROFESSIONAL DELETE CONFIRMATION MODAL */}
+            {deleteModal.show && (
+                <div className="modal show d-block animate__animated animate__fadeIn" style={{ backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 2000 }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                            <div className="modal-header bg-danger text-white border-0">
+                                <h5 className="modal-title fw-bold">Confirm Removal</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setDeleteModal({ ...deleteModal, show: false })}></button>
+                            </div>
+                            <div className="modal-body p-4 text-center">
+                                <div className="mb-3 text-danger">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="currentColor" className="bi bi-exclamation-octagon" viewBox="0 0 16 16">
+                                        <path d="M4.54.146A.5.5 0 0 1 4.893 0h6.214a.5.5 0 0 1 .353.146l4.394 4.394a.5.5 0 0 1 .146.353v6.214a.5.5 0 0 1-.146.353l-4.394 4.394a.5.5 0 0 1-.353.146H4.893a.5.5 0 0 1-.353-.146L.146 11.46A.5.5 0 0 1 0 11.107V4.893a.5.5 0 0 1 .146-.353L4.54.146zM5.1 1 1 5.1v5.8L5.1 15h5.8l4.1-4.1V5.1L10.9 1H5.1z"/>
+                                        <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
+                                    </svg>
+                                </div>
+                                <h4 className="fw-bold">Are you sure?</h4>
+                                <p className="text-muted mb-0">You are about to remove <strong>{deleteModal.name}</strong> from the LDCN Hostel records.</p>
+                                <p className="small text-danger mt-2">This action cannot be undone. All attendance and application history will be purged.</p>
+                            </div>
+                            <div className="modal-footer border-0 p-3 bg-light">
+                                <button type="button" className="btn btn-secondary rounded-pill px-4" onClick={() => setDeleteModal({ ...deleteModal, show: false })}>Cancel</button>
+                                <button type="button" className="btn btn-danger rounded-pill px-4 fw-bold shadow-sm" onClick={handleFinalDelete}>Yes, Remove Permanently</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };

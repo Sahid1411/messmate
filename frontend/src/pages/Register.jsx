@@ -18,8 +18,51 @@ const Register = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
 
+    // Form Validation Logic
+    const validateForm = () => {
+        const { name, email, password, phone, role, dept, rollNo, roomNo } = formData;
+
+        if (name.length < 3) {
+            toast.error("Name must be at least 3 characters long.");
+            return false;
+        }
+
+        // Basic Email Regex
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            toast.error("Please enter a valid email address.");
+            return false;
+        }
+
+        // Phone Number: Exactly 10 digits
+        const phoneRegex = /^[0-9]{10}$/;
+        if (!phoneRegex.test(phone)) {
+            toast.error("Phone number must be exactly 10 digits.");
+            return false;
+        }
+
+        if (password.length < 6) {
+            toast.error("Password must be at least 6 characters long.");
+            return false;
+        }
+
+        // Conditional validation for students
+        if (role === 'student') {
+            if (!dept || !rollNo || !roomNo) {
+                toast.error("Please fill all student-specific fields.");
+                return false;
+            }
+        }
+
+        return true;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Trigger validation before API call
+        if (!validateForm()) return;
+
         setLoading(true);
         try {
             await axios.post('http://localhost:5000/api/auth/register', formData);
@@ -29,6 +72,14 @@ const Register = () => {
             toast.error(error.response?.data?.message || 'Error Registering User');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Helper to only allow numbers in phone field
+    const handlePhoneChange = (e) => {
+        const value = e.target.value.replace(/\D/g, ""); // Remove non-numeric characters
+        if (value.length <= 10) { // Limit to 10 characters
+            setFormData({ ...formData, phone: value });
         }
     };
 
@@ -65,13 +116,13 @@ const Register = () => {
                                     </div>
 
                                     <div className="mb-3">
-                                        <label className="form-label">Phone Number</label>
+                                        <label className="form-label">Phone Number (10 Digits)</label>
                                         <input 
                                             type="text" 
                                             className="form-control" 
                                             value={formData.phone} 
-                                            placeholder="e.g. +91 9876543210" 
-                                            onChange={e => setFormData({...formData, phone: e.target.value})} 
+                                            placeholder="Enter 10 digit number" 
+                                            onChange={handlePhoneChange} 
                                             required 
                                         />
                                     </div>
@@ -82,6 +133,7 @@ const Register = () => {
                                             className="form-control" 
                                             type="password" 
                                             value={formData.password} 
+                                            placeholder="Min 6 characters"
                                             onChange={e => setFormData({...formData, password: e.target.value})} 
                                             required 
                                         />

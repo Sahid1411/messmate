@@ -32,14 +32,22 @@ const StudentDashboard = () => {
         const start = new Date(joiningDate);
         const end = new Date();
         const months = [];
-        while (start <= end) {
-            months.push(start.toLocaleString('default', { month: 'long', year: 'numeric' }));
-            start.setMonth(start.getMonth() + 1);
-        }
+
+        // Reset to the 1st of the joining month to avoid day-overflow errors
+        let current = new Date(start.getFullYear(), start.getMonth(), 1);
+
+        while (current <= end) {
+        months.push(current.toLocaleString('default', { month: 'long', year: 'numeric' }));
+        // Move to the next month
+        current.setMonth(current.getMonth() + 1);
+    }
         return months;
     };
 
-    const allPossibleMonths = getDueMonths(user.createdAt || '2025-09-01');
+    const allPossibleMonths = user?.createdAt 
+    ? getDueMonths(user.createdAt) 
+    : [];
+
     const unpaidMonths = allPossibleMonths.filter(month =>
         !history.find(p => p.month === month && (p.status === 'Success' || p.status === 'Pending'))
     );
@@ -258,71 +266,72 @@ const StudentDashboard = () => {
                     <div className="col-md-10 p-3 p-md-4 bg-light overflow-auto content-area" style={{ height: '92vh' }}>
                         
                        {activeTab === 'overview' && (
-    <div className="row g-3 animate__animated animate__fadeIn">
-        {/* Welcome Header - Responsive text sizes */}
-        <div className="col-12 mb-2 mb-md-4 text-center text-md-start">
-            <h3 className="fw-bold display-6 display-md-5">Welcome, {user.name}!</h3>
-            <p className="text-muted">
-                <span className="badge bg-primary-subtle text-primary me-2">ID: {user.rollNo}</span>
-                <span className="badge bg-secondary-subtle text-secondary">{user.dept}</span>
-            </p>
-        </div>
+                        <div className="row g-3 animate__animated animate__fadeIn">
+                        {/* Welcome Header - Responsive text sizes */}
+                        <div className="col-12 mb-2 mb-md-4 text-center text-md-start">
+                            <h3 className="fw-bold display-6 display-md-5">Welcome, {user.name}!</h3>
+                            <p className="text-muted">
+                                <span className="badge bg-primary-subtle text-primary me-2">ID: {user.rollNo}</span>
+                                <span className="badge bg-secondary-subtle text-secondary">{user.dept}</span>
+                            </p>
+                        </div>
 
-        {/* Conditional Rendering */}
-        {unpaidMonths.length > 0 ? (
-            unpaidMonths.map(month => (
-                <div key={month} className="col-12 col-sm-6 col-lg-4 mb-3">
-                    <div className="card border-0 shadow-sm border-start border-danger border-4 h-100 transition-hover">
-                        <div className="card-body p-4">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                                <h5 className="fw-bold mb-0">{month}</h5>
-                                <span className="badge rounded-pill bg-danger-subtle text-danger small">Pending</span>
+                        {/* Conditional Rendering */}
+                        {unpaidMonths.length > 0 ? (
+                            unpaidMonths.map(month => (
+                                <div key={month} className="col-12 col-sm-6 col-lg-4 mb-3">
+                                    <div className="card border-0 shadow-sm border-start border-danger border-4 h-100 transition-hover">
+                                        <div className="card-body p-4">
+                                            <div className="d-flex justify-content-between align-items-start mb-2">
+                                                <h5 className="fw-bold mb-0">{month}</h5>
+                                                <span className="badge rounded-pill bg-danger-subtle text-danger small">Pending</span>
+                                            </div>
+                                            <p className="text-danger fs-4 fw-bold mb-4">₹{settings.feeAmount}</p>
+                                            <button 
+                                                disabled={loading} 
+                                                onClick={() => handlePay(month)} 
+                                                className="btn btn-primary w-100 py-2 fw-bold shadow-sm rounded-3"
+                                            >
+                                                {loading ? 'Processing...' : 'Pay Now'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            /* --- FULLY RESPONSIVE SUCCESS UI --- */
+                            <div className="col-12">
+                                <div className="card border-0 shadow-sm text-center p-4 p-md-5 border-top border-success border-4 rounded-4 bg-white mx-auto" style={{ maxWidth: '800px' }}>
+                                    <div className="card-body py-2 py-md-4">
+                                        {/* Inline SVG Success Icon - Guaranteed to show */}
+                                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle mb-4 shadow-sm" 
+                                            style={{ width: 'clamp(80px, 15vw, 120px)', height: 'clamp(80px, 15vw, 120px)', backgroundColor: '#e9f7ef' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="60%" height="60%" fill="#198754" className="bi bi-check-lg" viewBox="0 0 16 16">
+                                                <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.42-6.446z"/>
+                                            </svg>
+                                        </div>
+                                        
+                                        <h2 className="fw-bold text-dark mb-2 h1-responsive">All Caught Up!</h2>
+                                        <p className="text-muted fs-5 mb-4 px-2">
+                                            Great job! You have cleared all your mess dues for **LDCN Hostel**. <br className="d-none d-md-block" />
+                                            There are no pending payments at this time.
+                                        </p>
+                                        
+                                        <div className="d-flex flex-column flex-sm-row justify-content-center align-items-center gap-3">
+                                            <span className="badge bg-success-subtle text-success px-4 py-3 rounded-pill border border-success border-opacity-25 fs-6 w-100 w-sm-auto">
+                                                Current Balance: ₹0.00
+                                            </span>
+                                            <button onClick={() => setActiveTab('history')} className="btn btn-outline-secondary rounded-pill px-4 py-2 w-100 w-sm-auto">
+                                                View History
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <p className="text-danger fs-4 fw-bold mb-4">₹{settings.feeAmount}</p>
-                            <button 
-                                disabled={loading} 
-                                onClick={() => handlePay(month)} 
-                                className="btn btn-primary w-100 py-2 fw-bold shadow-sm rounded-3"
-                            >
-                                {loading ? 'Processing...' : 'Pay Now'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            ))
-        ) : (
-            /* --- FULLY RESPONSIVE SUCCESS UI --- */
-            <div className="col-12">
-                <div className="card border-0 shadow-sm text-center p-4 p-md-5 border-top border-success border-4 rounded-4 bg-white mx-auto" style={{ maxWidth: '800px' }}>
-                    <div className="card-body py-2 py-md-4">
-                        {/* Inline SVG Success Icon - Guaranteed to show */}
-                        <div className="d-inline-flex align-items-center justify-content-center rounded-circle mb-4 shadow-sm" 
-                             style={{ width: 'clamp(80px, 15vw, 120px)', height: 'clamp(80px, 15vw, 120px)', backgroundColor: '#e9f7ef' }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="60%" height="60%" fill="#198754" className="bi bi-check-lg" viewBox="0 0 16 16">
-                                <path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.42-6.446z"/>
-                            </svg>
-                        </div>
-                        
-                        <h2 className="fw-bold text-dark mb-2 h1-responsive">All Caught Up!</h2>
-                        <p className="text-muted fs-5 mb-4 px-2">
-                            Great job! You have cleared all your mess dues for **LDCN Hostel**. <br className="d-none d-md-block" />
-                            There are no pending payments at this time.
-                        </p>
-                        
-                        <div className="d-flex flex-column flex-sm-row justify-content-center align-items-center gap-3">
-                            <span className="badge bg-success-subtle text-success px-4 py-3 rounded-pill border border-success border-opacity-25 fs-6 w-100 w-sm-auto">
-                                Current Balance: ₹0.00
-                            </span>
-                            <button onClick={() => setActiveTab('history')} className="btn btn-outline-secondary rounded-pill px-4 py-2 w-100 w-sm-auto">
-                                View History
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-    </div>
-)}
+                        )}
+                            </div>
+                        )}
+
                         {/* Profile section  */}
                         {activeTab === 'profile' && (
                             <div className="row justify-content-center animate__animated animate__fadeIn">
@@ -447,20 +456,20 @@ const StudentDashboard = () => {
                             </div>
                         )}
 
-                        {activeTab === 'rules' && (
-            <div className="card border-0 shadow-sm p-4 animate__animated animate__fadeIn">
-            <h4 className="fw-bold text-primary mb-4">Official Hostel Mess Rules & Regulations</h4>
-            <div className="row g-4">
-            {/* Left Column: Meal Schedule & Fees */}
-            <div className="col-md-5 border-end">
-                <div className="mb-4">
-                    <h6 className="fw-bold text-dark"><i className="bi bi-clock-history me-2"></i>🕒 Meal Timings</h6>
-                    <ul className="list-group list-group-flush small">
-                        <li className="list-group-item d-flex justify-content-between"><span>Breakfast</span> <span className="fw-bold text-primary">08:30 AM - 09:30 AM</span></li>
-                        <li className="list-group-item d-flex justify-content-between"><span>Lunch</span> <span className="fw-bold text-primary">12:00 PM - 02:00 PM</span></li>
-                        <li className="list-group-item d-flex justify-content-between"><span>Dinner</span> <span className="fw-bold text-primary">08:30 PM - 09:30 PM</span></li>
-                    </ul>
-                </div>
+                {activeTab === 'rules' && (
+                <div className="card border-0 shadow-sm p-4 animate__animated animate__fadeIn">
+                <h4 className="fw-bold text-primary mb-4">Official Hostel Mess Rules & Regulations</h4>
+                <div className="row g-4">
+                {/* Left Column: Meal Schedule & Fees */}
+                <div className="col-md-5 border-end">
+                    <div className="mb-4">
+                        <h6 className="fw-bold text-dark"><i className="bi bi-clock-history me-2"></i>🕒 Meal Timings</h6>
+                        <ul className="list-group list-group-flush small">
+                            <li className="list-group-item d-flex justify-content-between"><span>Breakfast</span> <span className="fw-bold text-primary">08:30 AM - 09:30 AM</span></li>
+                            <li className="list-group-item d-flex justify-content-between"><span>Lunch</span> <span className="fw-bold text-primary">12:00 PM - 02:00 PM</span></li>
+                            <li className="list-group-item d-flex justify-content-between"><span>Dinner</span> <span className="fw-bold text-primary">08:30 PM - 09:30 PM</span></li>
+                        </ul>
+                    </div>
                 
                 <div className="p-3 bg-light rounded">
                     <h6 className="fw-bold text-dark"><i className="bi bi-currency-rupee me-2"></i>💰 Fee Payment Model</h6>
