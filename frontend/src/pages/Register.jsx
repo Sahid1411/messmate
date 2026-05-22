@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import toast from 'react-hot-toast';
 
-const Register = () => { 
+const Register = () => {
     const [formData, setFormData] = useState({ 
         name: '', 
         email: '', 
@@ -65,7 +65,7 @@ const Register = () => {
 
         setLoading(true);
         try {
-            await axios.post('http://localhost:5000/api/auth/register', formData);
+            await axios.post('http://https://messmate-backend.onrender.com/api/auth/register', formData);
             toast.success('Registration Successful! Please Login.');
             navigate('/login');
         } catch (error) {

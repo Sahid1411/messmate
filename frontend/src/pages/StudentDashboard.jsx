@@ -60,10 +60,10 @@ const StudentDashboard = () => {
         setLoading(true);
         try {
             const [hRes, sRes, aRes, appRes] = await Promise.all([
-                axios.get('http://localhost:5000/api/payment/my-history', config),
-                axios.get('http://localhost:5000/api/settings'),
-                axios.get('http://localhost:5000/api/mess/attendance/my', config),
-                axios.get('http://localhost:5000/api/mess/applications/my', config)
+                axios.get('http://https://messmate-backend.onrender.com/api/payment/my-history', config),
+                axios.get('http://https://messmate-backend.onrender.com/api/settings'),
+                axios.get('http://https://messmate-backend.onrender.com/api/mess/attendance/my', config),
+                axios.get('http://https://messmate-backend.onrender.com/api/mess/applications/my', config)
             ]);
             setHistory(hRes.data);
             setSettings(sRes.data);
@@ -79,7 +79,7 @@ const StudentDashboard = () => {
     const handleUpdateProfile = async (e) => {
     e.preventDefault();
     try {
-        const { data } = await axios.put('http://localhost:5000/api/auth/update-profile', profileForm, config);
+        const { data } = await axios.put('http://https://messmate-backend.onrender.com/api/auth/update-profile', profileForm, config);
         
         // 1. Update LocalStorage
         localStorage.setItem('userInfo', JSON.stringify(data.user));
@@ -101,7 +101,7 @@ const StudentDashboard = () => {
     const handlePay = async (month) => {
         setLoading(true);
         try {
-            const { data } = await axios.post('http://localhost:5000/api/payment/create-order', { month }, config);
+            const { data } = await axios.post('http://https://messmate-backend.onrender.com/api/payment/create-order', { month }, config);
             const options = {
                 key: data.key_id,
                 amount: data.order.amount,
@@ -110,7 +110,7 @@ const StudentDashboard = () => {
                 description: `Fees for ${month}`,
                 order_id: data.order.id,
                 handler: async (response) => {
-                    await axios.post('http://localhost:5000/api/payment/verify-payment', {
+                    await axios.post('http://https://messmate-backend.onrender.com/api/payment/verify-payment', {
                         ...response, amount: settings.feeAmount, month
                     }, config);
                     toast.success(`Payment successful for ${month}`);
@@ -131,7 +131,7 @@ const StudentDashboard = () => {
     const handleAppSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('http://localhost:5000/api/mess/apply', appForm, config);
+            await axios.post('http://https://messmate-backend.onrender.com/api/mess/apply', appForm, config);
             toast.success("Application submitted successfully!");
             setAppForm({ type: 'Leave', startDate: '', endDate: '', subject: '', message: '' });
             fetchInitialData();
