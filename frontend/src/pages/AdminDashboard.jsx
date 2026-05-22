@@ -45,10 +45,10 @@ const AdminDashboard = () => {
         setLoading(true);
         try {
             const [payRes, studRes, setRes, appRes] = await Promise.all([
-                axios.get('http://https://messmate-backend.onrender.com/api/payment/all', config),
-                axios.get('http://https://messmate-backend.onrender.com/api/auth/students', config),
-                axios.get('http://https://messmate-backend.onrender.com/api/settings'),
-                axios.get('http://https://messmate-backend.onrender.com/api/mess/applications', config)
+                axios.get('https://messmate-backend.onrender.com/api/payment/all', config),
+                axios.get('https://messmate-backend.onrender.com/api/auth/students', config),
+                axios.get('https://messmate-backend.onrender.com/api/settings'),
+                axios.get('https://messmate-backend.onrender.com/api/mess/applications', config)
             ]);
             setPayments(payRes.data);
             setStudents(studRes.data);
@@ -64,7 +64,7 @@ const AdminDashboard = () => {
     // New: Fetch attendance for specific date to show marked/unmarked status
     const fetchAttendance = async () => {
         try {
-            const { data } = await axios.get(`http://https://messmate-backend.onrender.com/api/mess/attendance?date=${attendanceDate}`, config);
+            const { data } = await axios.get(`https://messmate-backend.onrender.com/api/mess/attendance?date=${attendanceDate}`, config);
             setAttendanceRecords(data);
         } catch (error) {
             console.error("Attendance fetch error");
@@ -82,7 +82,7 @@ const AdminDashboard = () => {
 
     const handleMarkAttendance = async (studentId, mealType) => {
         try {
-            await axios.post('http://https://messmate-backend.onrender.com/api/mess/attendance/mark', {
+            await axios.post('https://messmate-backend.onrender.com/api/mess/attendance/mark', {
                 studentId,
                 date: attendanceDate,
                 mealType
@@ -97,7 +97,7 @@ const AdminDashboard = () => {
     const handleAppReply = async (e) => {
         e.preventDefault();
         try {
-            await axios.put(`http://https://messmate-backend.onrender.com/api/mess/applications/${replyData.id}`, {
+            await axios.put(`https://messmate-backend.onrender.com/api/mess/applications/${replyData.id}`, {
                 status: replyData.status,
                 adminReply: replyData.text
             }, config);
@@ -114,7 +114,7 @@ const AdminDashboard = () => {
         e.preventDefault();
         try {
             const { data } = await axios.put(
-                'http://https://messmate-backend.onrender.com/api/settings', 
+                'https://messmate-backend.onrender.com/api/settings', 
                 { feeAmount: settings.feeAmount }, 
                 config
             );
@@ -129,7 +129,7 @@ const AdminDashboard = () => {
     const handleConfirmCashPayment = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('http://https://messmate-backend.onrender.com/api/payment/record-cash', { 
+            await axios.post('https://messmate-backend.onrender.com/api/payment/record-cash', { 
                 studentId: cashModal.studentId, 
                 amount: cashModal.amount, 
                 month: selectedMonth 
@@ -152,7 +152,7 @@ const AdminDashboard = () => {
 
     const handleApprove = async (id) => {
         try {
-            await axios.put(`http://https://messmate-backend.onrender.com/api/payment/approve/${id}`, {}, config);
+            await axios.put(`https://messmate-backend.onrender.com/api/payment/approve/${id}`, {}, config);
             toast.success("Payment Approved!");
             fetchData();
         } catch (error) { toast.error("Error approving"); }
@@ -161,7 +161,7 @@ const AdminDashboard = () => {
     const handleReject = async (id) => {
         if(window.confirm("Reject and remove this payment request?")) {
             try {
-                await axios.delete(`http://https://messmate-backend.onrender.com/api/payment/reject/${id}`, config);
+                await axios.delete(`https://messmate-backend.onrender.com/api/payment/reject/${id}`, config);
                 toast.error("Payment Rejected");
                 fetchData();
             } catch (error) { toast.error("Error rejecting"); }
@@ -206,7 +206,7 @@ const AdminDashboard = () => {
         // Step B: The actual API call
         const handleFinalDelete = async () => {
             try {
-                await axios.delete(`http://https://messmate-backend.onrender.com/api/auth/student/${deleteModal.id}`, config);
+                await axios.delete(`https://messmate-backend.onrender.com/api/auth/student/${deleteModal.id}`, config);
                 toast.success(`${deleteModal.name} removed successfully`);
                 setDeleteModal({ show: false, id: '', name: '' }); // Close box
                 fetchData(); // Refresh list

@@ -14,7 +14,7 @@ const Login = () => {
         e.preventDefault();
         setLoading(true);
         try {
-            const { data } = await axios.post('http://https://messmate-backend.onrender.com/api/auth/login', { email, password });
+            const { data } = await axios.post('https://messmate-backend.onrender.com/api/auth/login', { email, password });
             
             // Save info
             localStorage.setItem('userInfo', JSON.stringify(data.user));
