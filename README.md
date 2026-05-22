@@ -1,9 +1,14 @@
 # MessMate – Hostel Mess Management System
 
+![React](https://img.shields.io/badge/Frontend-React-blue)
+![Node.js](https://img.shields.io/badge/Backend-Node.js-green)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB-darkgreen)
+![Vercel](https://img.shields.io/badge/Deployment-Vercel-black)
+
 MessMate is a full-stack hostel mess management system developed to simplify mess fee tracking, attendance management, and student record handling for hostel boarders and administrators.
 
 ## 🚀 Live Demo
-https://messmate.vercel.app
+[Live Demo](https://messmate-lemon.vercel.app)
 
 ---
 
@@ -85,7 +90,7 @@ npm start
 
 ## 📚 Project Purpose
 
-This project was developed as a practical hostel management solution to improve mess fee tracking and administrative workflow management.
+Developed as a semester project to simplify hostel mess management and student fee tracking.
 
 ---
 
