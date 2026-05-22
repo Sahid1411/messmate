@@ -65,7 +65,7 @@ const Register = () => {
 
         setLoading(true);
         try {
-            await axios.post('https://messmate-backend.onrender.com/api/auth/register', formData);
+            await axios.post('https://messmate-backend-kj4h.onrender.com/api/auth/register', formData);
             toast.success('Registration Successful! Please Login.');
             navigate('/login');
         } catch (error) {
